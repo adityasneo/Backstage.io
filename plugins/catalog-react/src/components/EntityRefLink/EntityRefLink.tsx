@@ -19,13 +19,15 @@ import {
   CompoundEntityRef,
   DEFAULT_NAMESPACE,
   parseEntityRef,
+  stringifyEntityRef,
 } from '@backstage/catalog-model';
 import React, { forwardRef } from 'react';
 import { entityRouteRef } from '../../routes';
-import { humanizeEntityRef } from './humanize';
 import { Link, LinkProps } from '@backstage/core-components';
-import { useRouteRef } from '@backstage/core-plugin-api';
+import { useApi, useRouteRef } from '@backstage/core-plugin-api';
 import { Tooltip } from '@material-ui/core';
+import { entityPresentationApiRef } from '../../apis';
+import useAsync from 'react-use/lib/useAsync';
 
 /**
  * Props for {@link EntityRefLink}.
@@ -47,47 +49,64 @@ export type EntityRefLinkProps = {
 export const EntityRefLink = forwardRef<any, EntityRefLinkProps>(
   (props, ref) => {
     const { entityRef, defaultKind, title, children, ...linkProps } = props;
-    const entityRoute = useRouteRef(entityRouteRef);
+    const entityRoute = useEntityRoute(props.entityRef);
+    const presentationApi = useApi(entityPresentationApiRef);
 
-    let kind;
-    let namespace;
-    let name;
+    const presentation = useAsync(() => {
+      return presentationApi.renderEntityRef({
+        entityRef:
+          typeof entityRef === 'string'
+            ? entityRef
+            : stringifyEntityRef(entityRef),
+      });
+    }, [entityRef, presentationApi]);
 
-    if (typeof entityRef === 'string') {
-      const parsed = parseEntityRef(entityRef);
-      kind = parsed.kind;
-      namespace = parsed.namespace;
-      name = parsed.name;
-    } else if ('metadata' in entityRef) {
-      kind = entityRef.kind;
-      namespace = entityRef.metadata.namespace;
-      name = entityRef.metadata.name;
-    } else {
-      kind = entityRef.kind;
-      namespace = entityRef.namespace;
-      name = entityRef.name;
-    }
-
-    kind = kind.toLocaleLowerCase('en-US');
-    namespace = namespace?.toLocaleLowerCase('en-US') ?? DEFAULT_NAMESPACE;
-
-    const routeParams = { kind, namespace, name };
-    const formattedEntityRefTitle = humanizeEntityRef(
-      { kind, namespace, name },
-      { defaultKind },
-    );
+    const primary = presentation.loading
+      ? '...'
+      : presentation.value?.primaryTitle || entityRef;
+    const secondary = presentation.value?.secondaryTitle;
 
     const link = (
-      <Link {...linkProps} ref={ref} to={entityRoute(routeParams)}>
+      <Link {...linkProps} ref={ref} to={entityRoute}>
         {children}
-        {!children && (title ?? formattedEntityRefTitle)}
+        {!children && (title ?? primary)}
       </Link>
     );
 
-    return title ? (
-      <Tooltip title={formattedEntityRefTitle}>{link}</Tooltip>
-    ) : (
-      link
-    );
+    return secondary ? <Tooltip title={secondary}>{link}</Tooltip> : link;
   },
 ) as (props: EntityRefLinkProps) => JSX.Element;
+
+// Hook that computes the route to a given entity / ref. This is a bit
+// contrived, because it tries to retain the casing of the entity name if
+// present, but not of other parts. This is in an attempt to make slightly more
+// nice-looking URLs.
+function useEntityRoute(
+  entityRef: Entity | CompoundEntityRef | string,
+): string {
+  const entityRoute = useRouteRef(entityRouteRef);
+
+  let kind;
+  let namespace;
+  let name;
+
+  if (typeof entityRef === 'string') {
+    const parsed = parseEntityRef(entityRef);
+    kind = parsed.kind;
+    namespace = parsed.namespace;
+    name = parsed.name;
+  } else if ('metadata' in entityRef) {
+    kind = entityRef.kind;
+    namespace = entityRef.metadata.namespace;
+    name = entityRef.metadata.name;
+  } else {
+    kind = entityRef.kind;
+    namespace = entityRef.namespace;
+    name = entityRef.name;
+  }
+
+  kind = kind.toLocaleLowerCase('en-US');
+  namespace = namespace?.toLocaleLowerCase('en-US') ?? DEFAULT_NAMESPACE;
+
+  return entityRoute({ kind, namespace, name });
+}

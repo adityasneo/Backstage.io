@@ -261,6 +261,18 @@ export type EntityPeekAheadPopoverProps = PropsWithChildren<{
   delayTime?: number;
 }>;
 
+// @public
+export interface EntityPresentationApi {
+  // (undocumented)
+  renderEntityRef(options: {
+    entityRef: string;
+    variant?: string;
+  }): Promise<EntityRefPresentation>;
+}
+
+// @public
+export const entityPresentationApiRef: ApiRef<EntityPresentationApi>;
+
 // @public (undocumented)
 export const EntityProcessingStatusPicker: () => JSX.Element;
 
@@ -309,6 +321,18 @@ export type EntityRefLinksProps<
     }
 ) &
   Omit<LinkProps, 'to'>;
+
+// @public
+export interface EntityRefPresentation {
+  // (undocumented)
+  entityRef: string;
+  // (undocumented)
+  icon?: JSX.Element | undefined;
+  // (undocumented)
+  primaryTitle: string;
+  // (undocumented)
+  secondaryTitle?: string;
+}
 
 // @public
 export function entityRouteParams(entity: Entity): {
